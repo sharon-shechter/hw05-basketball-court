@@ -1,5 +1,4 @@
 // hw5.js – Updated implementation for HW05 infrastructure
-// NOTE: This file completely replaces the original starter file.
 // --------------------------------------------------------------
 // 1. Scene / Camera / Renderer boilerplate (kept from starter)
 // --------------------------------------------------------------
@@ -147,8 +146,7 @@ function addCourtMarkings() {
 
 
 function addBackboardSquare(boardMesh, color = 0xff0000) {
-  // Dimensions: most real boards use a 0.45 m x 0.59 m inner rectangle,
-  // centred horizontally and 0.15 m below the top edge (NBA spec).
+
   const w = 0.59;
   const h = 0.45;
   const topOffset = 0.15;
@@ -239,34 +237,62 @@ function createHoop(isLeftSide) {
 // 7. Basketball (Static)
 // --------------------------------------------------------------
 function createBasketball() {
-  const ballGeo = new THREE.SphereGeometry(0.375, 32, 32);
-  const ballMat = new THREE.MeshPhongMaterial({ color: 0xd35400 }); // orange
-  const ball = new THREE.Mesh(ballGeo, ballMat);
-  ball.position.set(0, 0.375 + COURT_HEIGHT / 2, 0);
+  const R       = 0.375;          // ball radius  (m)
+  const seamR   = R + 0.001;      // lift seams to avoid z-fighting
+  const ballMat = new THREE.MeshPhongMaterial({ color: 0xd35400 });
+
+  /* --- sphere mesh --- */
+  const ball = new THREE.Mesh(
+    new THREE.SphereGeometry(R, 48, 48),
+    ballMat
+  );
+  ball.position.set(0, R + COURT_HEIGHT / 2, 0);
   ball.castShadow = true;
   scene.add(ball);
 
-  // Basic black seam lines (longitude/latitude circles)
+  /* --- seam material --- */
   const seamMat = new THREE.LineBasicMaterial({ color: 0x000000 });
 
-  // Equator line
-  const equatorPts = generateArcPoints(0.375 + 0.001, 0, Math.PI * 2, 128);
-  const equator = new THREE.Line(
-    new THREE.BufferGeometry().setFromPoints(equatorPts),
-    seamMat
-  );
-  equator.rotation.y = Math.PI / 2;
-  equator.position.copy(ball.position);
-  scene.add(equator);
+  /* helper: create a great-circle seam, apply rotations */
+  const addGreatCircle = (rx = 0, ry = 0, rz = 0) => {
+    const pts = generateArcPoints(seamR, 0, Math.PI * 2, 256);
+    const line = new THREE.Line(
+      new THREE.BufferGeometry().setFromPoints(pts),
+      seamMat
+    );
+    line.rotation.set(rx, ry, rz);
+    line.position.copy(ball.position);
+    scene.add(line);
+  };
 
-  // Longitudinal line
-  const longPts = generateArcPoints(0.375 + 0.001, 0, Math.PI * 2, 128);
-  const longitude = new THREE.Line(
-    new THREE.BufferGeometry().setFromPoints(longPts),
-    seamMat
-  );
-  longitude.position.copy(ball.position);
-  scene.add(longitude);
+  /* helper: create a latitude ring at ±phi (phi > 0 = north) */
+  const addLatitudeRing = (phi) => {
+    // circle radius at that latitude
+    const rLat = R * Math.cos(phi);
+    const y    = R * Math.sin(phi);
+
+    const segs = 256, pts = [];
+    for (let i = 0; i <= segs; i++) {
+      const t = (i / segs) * Math.PI * 2;
+      pts.push(new THREE.Vector3(Math.cos(t) * rLat,
+                                 y,
+                                 Math.sin(t) * rLat));
+    }
+    const ring = new THREE.LineLoop(
+      new THREE.BufferGeometry().setFromPoints(pts),
+      seamMat
+    );
+    ring.position.copy(ball.position);
+    scene.add(ring);
+  };
+
+  /* --- draw seams ------------------------------------------- */
+  addGreatCircle();                     // equator (XZ plane)
+  addGreatCircle(Math.PI / 2, 0, 0);    // meridian (YZ plane)
+
+  const phi = Math.PI / 6;              // 30° above / below equator
+  addLatitudeRing( phi);                // north latitude ring
+  addLatitudeRing(-phi);                // south latitude ring
 }
 
 // --------------------------------------------------------------
