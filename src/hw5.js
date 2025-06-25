@@ -143,6 +143,37 @@ function addCourtMarkings() {
 // --------------------------------------------------------------
 // 6. Hoops (Backboard, Rim, Net, Support)
 // --------------------------------------------------------------
+// A function to add a square outline to the backboard mesh
+
+
+function addBackboardSquare(boardMesh, color = 0xff0000) {
+  // Dimensions: most real boards use a 0.45 m x 0.59 m inner rectangle,
+  // centred horizontally and 0.15 m below the top edge (NBA spec).
+  const w = 0.59;
+  const h = 0.45;
+  const topOffset = 0.15;
+
+  const halfW = w / 2;
+  const halfH = h / 2;
+
+  const pts = [
+    new THREE.Vector3(-halfW,  halfH,  BACKBOARD_THICKNESS / 2 + 0.001),
+    new THREE.Vector3( halfW,  halfH,  BACKBOARD_THICKNESS / 2 + 0.001),
+    new THREE.Vector3( halfW, -halfH,  BACKBOARD_THICKNESS / 2 + 0.001),
+    new THREE.Vector3(-halfW, -halfH,  BACKBOARD_THICKNESS / 2 + 0.001),
+  ];
+
+  // Shift rectangle down from the top edge
+  pts.forEach(p => (p.y -= BACKBOARD_HEIGHT / 2 - topOffset - halfH));
+
+  const square = new THREE.LineLoop(
+    new THREE.BufferGeometry().setFromPoints(pts),
+    new THREE.LineBasicMaterial({ color, linewidth: 2 })
+  );
+
+  boardMesh.add(square);  // attach to the board so it inherits transforms
+}
+
 function createHoop(isLeftSide) {
   const hoopGroup = new THREE.Group();
 
@@ -161,7 +192,7 @@ function createHoop(isLeftSide) {
   );
   backboard.position.set(0, RIM_HEIGHT + BACKBOARD_HEIGHT / 2 - 0.15, -0.30);
   hoopGroup.add(backboard);
-
+  addBackboardSquare(backboard);
   /* ---------- rim ---------- */
   const rim = new THREE.Mesh(
     new THREE.TorusGeometry(RIM_RADIUS, 0.03, 12, 24),
