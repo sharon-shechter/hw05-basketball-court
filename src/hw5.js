@@ -143,63 +143,64 @@ function addCourtMarkings() {
 // --------------------------------------------------------------
 // 6. Hoops (Backboard, Rim, Net, Support)
 // --------------------------------------------------------------
-function createHoop(xPosition) {
+function createHoop(isLeftSide) {
   const hoopGroup = new THREE.Group();
-  hoopGroup.position.set(xPosition, 0, 0);
 
+  /* orientation */
+  hoopGroup.rotation.y = isLeftSide ?  Math.PI / 2 : -Math.PI / 2;
 
-  const isLeftSide = xPosition < 0;           // baseline on the -x side?
-  hoopGroup.rotation.y = isLeftSide
-    ?  Math.PI / 2   // left baseline → face +x (toward center)
-    : -Math.PI / 2;  // right baseline → face –x
-
-  // Backboard
-  const backboardGeo = new THREE.BoxGeometry(
-    BACKBOARD_WIDTH,
-    BACKBOARD_HEIGHT,
-    BACKBOARD_THICKNESS
+  /* --- place hoop flush with baseline --- */
+  const BOARD_FRONT_LOCAL_Z = -1.5 + BACKBOARD_THICKNESS / 2; // board’s front z
+  const baselineX           = isLeftSide ? -COURT_LENGTH / 2 :  COURT_LENGTH / 2
+  const groupX = baselineX - BOARD_FRONT_LOCAL_Z * (isLeftSide ? 1 : -1);
+  hoopGroup.position.set(groupX, 0, 0);
+  /* ---------- backboard ---------- */
+  const backboard = new THREE.Mesh(
+    new THREE.BoxGeometry(BACKBOARD_WIDTH, BACKBOARD_HEIGHT, BACKBOARD_THICKNESS),
+    new THREE.MeshPhongMaterial({ color: 0xffffff, transparent: true, opacity: 0.4 })
   );
-  const backboardMat = new THREE.MeshPhongMaterial({ color: 0xffffff, transparent: true, opacity: 0.4 });
-  const backboard = new THREE.Mesh(backboardGeo, backboardMat);
-  backboard.position.set(0, RIM_HEIGHT + BACKBOARD_HEIGHT / 2 - 0.15, -0.3); // slight offset toward rim
-  backboard.castShadow = true;
+  backboard.position.set(0, RIM_HEIGHT + BACKBOARD_HEIGHT / 2 - 0.15, -0.30);
   hoopGroup.add(backboard);
 
-  // Rim – orange torus
-  const rimGeo = new THREE.TorusGeometry(RIM_RADIUS, 0.03, 12, 24);
-  const rimMat = new THREE.MeshPhongMaterial({ color: 0xff5900 });
-  const rim = new THREE.Mesh(rimGeo, rimMat);
-  rim.rotation.x = Math.PI / 2; // horizontal
+  /* ---------- rim ---------- */
+  const rim = new THREE.Mesh(
+    new THREE.TorusGeometry(RIM_RADIUS, 0.03, 12, 24),
+    new THREE.MeshPhongMaterial({ color: 0xff5900 })
+  );
+  rim.rotation.x = Math.PI / 2;
   rim.position.set(0, RIM_HEIGHT, 0);
-  rim.castShadow = true;
   hoopGroup.add(rim);
 
-  // Net (simplified 12 line segments)
+  /* ---------- net ---------- */
   const netGroup = new THREE.Group();
-  const netSegments = 12;
-  const netHeight = 0.45;
+  const netSegments = 12, netHeight = 0.45;
   for (let i = 0; i < netSegments; i++) {
-    const angle = (i / netSegments) * Math.PI * 2;
-    const p1 = new THREE.Vector3(Math.cos(angle) * RIM_RADIUS * 0.95, RIM_HEIGHT - 0.02, Math.sin(angle) * RIM_RADIUS * 0.95);
+    const a = (i / netSegments) * Math.PI * 2;
+    const p1 = new THREE.Vector3(Math.cos(a) * RIM_RADIUS * 0.95, RIM_HEIGHT - 0.02, Math.sin(a) * RIM_RADIUS * 0.95);
     const p2 = p1.clone().setY(RIM_HEIGHT - netHeight);
     netGroup.add(createLine([p1, p2], 0xffffff));
   }
   hoopGroup.add(netGroup);
 
-  // Support pole
-  const poleGeo = new THREE.CylinderGeometry(0.1, 0.1, RIM_HEIGHT + BACKBOARD_HEIGHT, 16);
+  /* ---------- support pole ---------- */
   const poleMat = new THREE.MeshPhongMaterial({ color: 0x999999 });
-  const pole = new THREE.Mesh(poleGeo, poleMat);
-  pole.position.set(0, (RIM_HEIGHT + BACKBOARD_HEIGHT) / 2 - 0.15, -2);
-  pole.castShadow = true;
+  const pole = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.1, 0.1, RIM_HEIGHT + BACKBOARD_HEIGHT, 16),
+    poleMat
+  );
+  pole.position.set(0, (RIM_HEIGHT + BACKBOARD_HEIGHT) / 2 - 0.15, -1.25);
   hoopGroup.add(pole);
 
-  // Support arm connecting pole to backboard
-  const armGeo = new THREE.BoxGeometry(0.12, 0.12, 2);
-  const arm = new THREE.Mesh(armGeo, poleMat);
-  arm.position.set(0, RIM_HEIGHT, -1.0);
+  /* ---------- support arm ---------- */
+  const armLen = 1.25 - 0.30; // pole→board distance minus board offset
+  const arm = new THREE.Mesh(
+    new THREE.BoxGeometry(0.12, 0.12, armLen),
+    poleMat
+  );
+  arm.position.set(0, RIM_HEIGHT, -(0.30 + armLen / 2));
   hoopGroup.add(arm);
 
+  /* push to scene */
   scene.add(hoopGroup);
 }
 
@@ -277,8 +278,9 @@ function setupUI() {
 function initScene() {
   createFloor();
   addCourtMarkings();
-  createHoop(-COURT_LENGTH / 2 + 1.2); // left hoop
-  createHoop(COURT_LENGTH / 2 - 1.2); // right hoop
+  createHoop(true);   // left baseline (−x)
+createHoop(false);  // right baseline (+x)
+
   createBasketball();
   setupUI();
 }
