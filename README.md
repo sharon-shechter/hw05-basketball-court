@@ -1,4 +1,4 @@
-# HW05 – 3D Basketball Court (WebGL + Three.js)
+# HW05 – 3D Basketball Court
 
 **Full Name:** Sharon Shechter  
 **Student ID:** 207812116
