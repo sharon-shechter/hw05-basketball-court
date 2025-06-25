@@ -72,17 +72,17 @@ function generateArcPoints(radius, angleStart, angleEnd, segments = 64) {
   return pts;
 }
 
+// --------------------------------------------------------------
 // 5. Court – Floor & Markings
 // --------------------------------------------------------------
-const RIM_TO_BASELINE = 1.575;   // metres from baseline to rim (≈ 5′ 2″)
-const FT_RADIUS       = 1.8;     // radius of centre / FT circles (1 .80 m)
-const FT_LINE_DIST    = 5.8;     // centre of FT circle is 5 .80 m from baseline
+const RIM_TO_BASELINE = 1.575;   // m  distance from baseline to rim
+const FT_RADIUS       = 1.8;     // m  radius of centre circle (1 .80 m)
 
 function createFloor() {
   const geometry = new THREE.BoxGeometry(COURT_LENGTH, COURT_HEIGHT, COURT_WIDTH);
   const material = new THREE.MeshPhongMaterial({ color: 0xc68642, shininess: 40 });
   const floor    = new THREE.Mesh(geometry, material);
-  floor.position.y = -COURT_HEIGHT / 2;      // top face sits at y = 0
+  floor.position.y = -COURT_HEIGHT / 2;      // put floor top at y = 0
   floor.receiveShadow = true;
   scene.add(floor);
 }
@@ -91,20 +91,17 @@ function addCourtMarkings() {
   const markings = new THREE.Group();
   const lineMat  = new THREE.LineBasicMaterial({ color: 0xffffff });
 
-  /* ── helper builders ─────────────────────────────────────── */
+  /* ── helper builders ───────────────────────────────────── */
   const buildLine = pts =>
     new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), lineMat);
 
   const buildCircle = (r, segments = 64) => {
     const pts = [];
     for (let i = 0; i <= segments; i++) {
-      const t = (i / segments) * Math.PI * 2;
-      pts.push(new THREE.Vector3(Math.cos(t) * r, 0.01, Math.sin(t) * r));
+      const a = (i / segments) * Math.PI * 2;
+      pts.push(new THREE.Vector3(Math.cos(a) * r, 0.01, Math.sin(a) * r));
     }
-    return new THREE.LineLoop(
-      new THREE.BufferGeometry().setFromPoints(pts),
-      lineMat
-    );
+    return new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(pts), lineMat);
   };
 
   const buildArc = (cx, r, start, end, segments = 64) => {
@@ -117,37 +114,30 @@ function addCourtMarkings() {
   };
 
   /* ---------- three-point arcs ---------- */
-  const TP_RADIUS = 6.75;                         // FIBA 3-pt radius
-  markings.add(                                   // left baseline (−x)
+  const TP_RADIUS = 6.75; // FIBA spec
+  // left baseline (−x) : arc opens toward +x
+  markings.add(
     buildArc(-COURT_LENGTH / 2 + RIM_TO_BASELINE,
              TP_RADIUS,
              -Math.PI / 2, Math.PI / 2)
   );
-  markings.add(                                   // right baseline (+x)
+  // right baseline (+x) : mirrored
+  markings.add(
     buildArc( COURT_LENGTH / 2 - RIM_TO_BASELINE,
               TP_RADIUS,
-              Math.PI / 2,  3 * Math.PI / 2)
+              Math.PI / 2, 3 * Math.PI / 2)
   );
 
-  /* ---------- free-throw semicircles ---------- */
-  const addFTArc = isLeft => {
-    const cx = (isLeft ? -1 : 1) * (COURT_LENGTH / 2 - FT_LINE_DIST);
-    const start = isLeft ?  Math.PI / 2 : -Math.PI / 2;     // flat edge on baseline
-    markings.add(buildArc(cx, FT_RADIUS, start, start + Math.PI, 48));
-  };
-  addFTArc(true);   // left
-  addFTArc(false);  // right
-
   /* ---------- centre line & circle ---------- */
-  markings.add(                                   // centre line
+  markings.add(
     buildLine([
       new THREE.Vector3(0, 0.01,  COURT_WIDTH / 2),
       new THREE.Vector3(0, 0.01, -COURT_WIDTH / 2)
     ])
   );
-  markings.add(buildCircle(FT_RADIUS));           // centre circle (1 .80 m)
+  markings.add(buildCircle(FT_RADIUS));   // centre circle
 
-  scene.add(markings);                            // add the whole group
+  scene.add(markings);
 }
 
 // --------------------------------------------------------------
