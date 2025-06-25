@@ -188,7 +188,7 @@ function createHoop(isLeftSide) {
     new THREE.BoxGeometry(BACKBOARD_WIDTH, BACKBOARD_HEIGHT, BACKBOARD_THICKNESS),
     new THREE.MeshPhongMaterial({ color: 0xffffff, transparent: true, opacity: 0.4 })
   );
-  backboard.position.set(0, RIM_HEIGHT + BACKBOARD_HEIGHT / 2 - 0.15, -0.30);
+  backboard.position.set(0, RIM_HEIGHT + BACKBOARD_HEIGHT / 2 - 0.15, -0.50);
   hoopGroup.add(backboard);
   addBackboardSquare(backboard);
   /* ---------- rim ---------- */
