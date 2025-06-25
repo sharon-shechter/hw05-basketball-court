@@ -4,9 +4,6 @@
 // --------------------------------------------------------------
 import { OrbitControls } from "./OrbitControls.js";
 
-// Three.js is expected as a global (via script tag) or bundled via a module system.
-// If you are using modules, uncomment the next line:
-// import * as THREE from "three";
 
 // Create scene
 const scene = new THREE.Scene();
