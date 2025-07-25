@@ -2,7 +2,8 @@
 // --------------------------------------------------------------
 // 1. Scene / Camera / Renderer boilerplate (kept from starter)
 // --------------------------------------------------------------
-import { OrbitControls } from "./OrbitControls.js";
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
 
 // Create scene
