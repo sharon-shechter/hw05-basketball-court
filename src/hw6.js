@@ -1,5 +1,4 @@
-// HW06 – Full version (Phases 1–7) + Aim% + STRICT scoring
-// index.html must have an import map that maps "three" & "three/addons/...".
+// HW06 – Full version (Phases 1–7) + Aim% + STRICT scoring + visual feedback
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
@@ -7,13 +6,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x000000);
 
-const camera = new THREE.PerspectiveCamera(
-  65,
-  window.innerWidth / window.innerHeight,
-  0.1,
-  2000
-);
-
+const camera = new THREE.PerspectiveCamera(65, window.innerWidth / window.innerHeight, 0.1, 2000);
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
 document.body.appendChild(renderer.domElement);
@@ -22,7 +15,6 @@ renderer.shadowMap.enabled = true;
 /* -------------------- 2) Lighting -------------------- */
 const ambientLight = new THREE.AmbientLight(0xffffff, 0.45);
 scene.add(ambientLight);
-
 const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
 dirLight.position.set(10, 20, 15);
 dirLight.castShadow = true;
@@ -40,7 +32,6 @@ const BACKBOARD_WIDTH = 1.8;
 const BACKBOARD_HEIGHT = 1.05;
 const BACKBOARD_THICKNESS = 0.05;
 const RIM_TO_BASELINE = 1.575;
-
 const FT_RADIUS = 1.8;
 
 // Physics & control
@@ -76,7 +67,7 @@ function createFloor() {
   const geometry = new THREE.BoxGeometry(COURT_LENGTH, COURT_HEIGHT, COURT_WIDTH);
   const material = new THREE.MeshPhongMaterial({ color: 0xc68642, shininess: 40 });
   const floor = new THREE.Mesh(geometry, material);
-  floor.position.y = -COURT_HEIGHT / 2;
+  floor.position.y = -COURT_HEIGHT / 2; // floor top == 0
   floor.receiveShadow = true;
   scene.add(floor);
 }
@@ -85,9 +76,7 @@ function addCourtMarkings() {
   const markings = new THREE.Group();
   const lineMat = new THREE.LineBasicMaterial({ color: 0xffffff });
 
-  const buildLine = (pts) =>
-    new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), lineMat);
-
+  const buildLine = (pts) => new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), lineMat);
   const buildCircle = (r, segments = 64) => {
     const pts = [];
     for (let i = 0; i <= segments; i++) {
@@ -96,7 +85,6 @@ function addCourtMarkings() {
     }
     return new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(pts), lineMat);
   };
-
   const buildArc = (cx, r, start, end, segments = 64) => {
     const pts = [];
     for (let i = 0; i <= segments; i++) {
@@ -106,19 +94,9 @@ function addCourtMarkings() {
     return buildLine(pts);
   };
 
-  markings.add(
-    buildArc(-COURT_LENGTH / 2 + RIM_TO_BASELINE, THREE_POINT_RADIUS, -Math.PI / 2, Math.PI / 2)
-  );
-  markings.add(
-    buildArc(COURT_LENGTH / 2 - RIM_TO_BASELINE, THREE_POINT_RADIUS, Math.PI / 2, 3 * Math.PI / 2)
-  );
-
-  markings.add(
-    buildLine([
-      new THREE.Vector3(0, 0.01, COURT_WIDTH / 2),
-      new THREE.Vector3(0, 0.01, -COURT_WIDTH / 2),
-    ])
-  );
+  markings.add(buildArc(-COURT_LENGTH / 2 + RIM_TO_BASELINE, THREE_POINT_RADIUS, -Math.PI / 2, Math.PI / 2));
+  markings.add(buildArc(COURT_LENGTH / 2 - RIM_TO_BASELINE, THREE_POINT_RADIUS, Math.PI / 2, 3 * Math.PI / 2));
+  markings.add(buildLine([new THREE.Vector3(0, 0.01, COURT_WIDTH / 2), new THREE.Vector3(0, 0.01, -COURT_WIDTH / 2)]));
   markings.add(buildCircle(FT_RADIUS));
 
   scene.add(markings);
@@ -161,7 +139,7 @@ function createHoop(isLeftSide) {
 
   const rim = new THREE.Mesh(
     new THREE.TorusGeometry(RIM_RADIUS, 0.03, 12, 24),
-    new THREE.MeshPhongMaterial({ color: 0xff5900 })
+    new THREE.MeshPhongMaterial({ color: 0xff5900, emissive: 0x000000 })
   );
   rim.rotation.x = Math.PI / 2;
   rim.position.set(0, RIM_HEIGHT, 0);
@@ -194,7 +172,6 @@ function createHoop(isLeftSide) {
 
   const rimWorldPos = new THREE.Vector3();
   rim.getWorldPosition(rimWorldPos);
-
   const backboardBox = new THREE.Box3().setFromObject(backboard);
 
   return { hoopGroup, rim, rimWorldPos, backboard, backboardBox };
@@ -257,6 +234,7 @@ function setupUI() {
       padding: 8px 14px;
       border-radius: 8px;
       pointer-events: none;
+      transition: box-shadow 0.15s ease, background 0.15s ease;
     }
     #score { top: 20px; left: 20px; }
     #controls { bottom: 20px; left: 20px; }
@@ -265,14 +243,8 @@ function setupUI() {
       height: 8px; width: 100%; background: rgba(255,255,255,0.15);
       margin-top: 6px; border-radius: 4px; overflow: hidden;
     }
-    #powerBar {
-      height: 100%; width: 50%; background: #27ae60;
-      transition: width 0.05s linear;
-    }
-    #msg {
-      top: 20px; right: 20px; font-weight: bold;
-      text-shadow: 0 0 6px #000;
-    }
+    #powerBar { height: 100%; width: 50%; background: #27ae60; transition: width 0.05s linear; }
+    #msg { top: 20px; right: 20px; font-weight: bold; text-shadow: 0 0 6px #000; }
   `;
   document.head.appendChild(style);
 }
@@ -288,15 +260,8 @@ const state = {
   vel: new THREE.Vector3(0, 0, 0),
   inAir: false,
   power: DEFAULT_POWER,
-  stats: {
-    score: 0,
-    attempts: 0,
-    made: 0,
-  },
-  hoops: {
-    left: null,
-    right: null,
-  },
+  stats: { score: 0, attempts: 0, made: 0 },
+  hoops: { left: null, right: null },
   currentShot: null,
   prevPos: new THREE.Vector3(),
 };
@@ -305,10 +270,8 @@ const state = {
 function initScene() {
   createFloor();
   addCourtMarkings();
-
   state.hoops.left = createHoop(true);
   state.hoops.right = createHoop(false);
-
   state.ball = createBasketball();
   setupUI();
   updateStatsUI();
@@ -318,45 +281,28 @@ initScene();
 /* -------------------- 11) Camera & Orbit -------------------- */
 camera.position.set(0, 12, 24);
 camera.lookAt(0, 0, 0);
-
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
 
 /* -------------------- 12) Input -------------------- */
 window.addEventListener("keydown", (e) => {
   keys[e.code] = true;
-
   if (e.key.toLowerCase() === "o") {
     orbitEnabled = !orbitEnabled;
     controls.enabled = orbitEnabled;
     return;
   }
-
-  if (e.code === "Space") {
-    if (!state.inAir) {
-      shoot();
-    }
-  }
-
-  if (e.code === "KeyR") {
-    resetBall();
-  }
+  if (e.code === "Space" && !state.inAir) shoot();
+  if (e.code === "KeyR") resetBall();
 });
-
-window.addEventListener("keyup", (e) => {
-  keys[e.code] = false;
-});
+window.addEventListener("keyup", (e) => (keys[e.code] = false));
 
 /* -------------------- 13) Core mechanics -------------------- */
 function nearestHoop() {
   const leftPos = state.hoops.left.rimWorldPos;
   const rightPos = state.hoops.right.rimWorldPos;
   const b = state.ball.position;
-
-  const leftDistSq = leftPos.distanceToSquared(b);
-  const rightDistSq = rightPos.distanceToSquared(b);
-
-  return leftDistSq < rightDistSq ? state.hoops.left : state.hoops.right;
+  return leftPos.distanceToSquared(b) < rightPos.distanceToSquared(b) ? state.hoops.left : state.hoops.right;
 }
 
 function shoot() {
@@ -385,7 +331,7 @@ function shoot() {
     aimPct: 0
   };
 
-  showMsg("SHOOT!");
+  showMsg("SHOOT!", 1000, "#ffffff");
 }
 
 function resetBall() {
@@ -395,16 +341,14 @@ function resetBall() {
   state.power = DEFAULT_POWER;
   updatePowerUI();
   updateStatsUI();
-  showMsg("Reset");
+  showMsg("Reset", 800, "#ffffff");
 }
 
 /* -------------------- 14) UI helpers -------------------- */
 function updatePowerUI() {
   const bar = document.getElementById("powerBar");
-  if (!bar) return;
-  bar.style.width = Math.round(state.power * 100) + "%";
+  if (bar) bar.style.width = Math.round(state.power * 100) + "%";
 }
-
 function updateStatsUI() {
   const s = state.stats;
   const scoreElem = document.getElementById("scoreValue");
@@ -420,19 +364,40 @@ function updateStatsUI() {
     accElem.textContent = pct + "%";
   }
 }
-
 function updateLastAimUI(pct) {
   const el = document.getElementById("lastAimValue");
   if (el) el.textContent = pct + "%";
 }
 
 let msgTimeout = null;
-function showMsg(text, ms = 1200) {
+function showMsg(text, ms = 1200, color = "#fff") {
   const div = document.getElementById("msg");
   if (!div) return;
   div.textContent = text;
+  div.style.color = color;
   if (msgTimeout) clearTimeout(msgTimeout);
   msgTimeout = setTimeout(() => (div.textContent = ""), ms);
+}
+
+function flashScorePanel(color) {
+  const el = document.getElementById("score");
+  if (!el) return;
+  const oldBG = el.style.background;
+  const oldShadow = el.style.boxShadow;
+  el.style.background = color === "green" ? "rgba(0,255,0,0.15)" : "rgba(255,0,0,0.15)";
+  el.style.boxShadow = color === "green" ? "0 0 20px rgba(0,255,0,0.7)" : "0 0 20px rgba(255,0,0,0.7)";
+  setTimeout(() => {
+    el.style.background = oldBG || "rgba(0,0,0,0.4)";
+    el.style.boxShadow = oldShadow || "none";
+  }, 400);
+}
+
+function rimFlash(hoop, colorHex) {
+  if (!hoop || !hoop.rim || !hoop.rim.material || !hoop.rim.material.emissive) return;
+  const mat = hoop.rim.material;
+  const old = mat.emissive.clone();
+  mat.emissive.setHex(colorHex);
+  setTimeout(() => mat.emissive.copy(old), 250);
 }
 
 /* -------------------- 15) Collision helpers -------------------- */
@@ -466,7 +431,7 @@ function resolveSphereAABBCollision(center, radius, box, vel, restitution) {
   return false;
 }
 
-// Rim collision – don't bounce if the ball is falling (to allow it to pass through)
+// Let the ball pass the rim if falling; bounce (soft) only if rising into it
 function resolveRimCollision(ballPos, vel, hoop) {
   const rimPos = hoop.rimWorldPos;
   const horizontalDist = Math.hypot(ballPos.x - rimPos.x, ballPos.z - rimPos.z);
@@ -475,7 +440,7 @@ function resolveRimCollision(ballPos, vel, hoop) {
   const minDist = RIM_RADIUS + BALL_RADIUS - RIM_BALL_BUFFER;
 
   if (nearVert && horizontalDist < minDist) {
-    if (vel.y <= 0) return false; // falling: let it pass
+    if (vel.y <= 0) return false;
 
     const normal = new THREE.Vector3(
       (ballPos.x - rimPos.x) / (horizontalDist || 1),
@@ -488,7 +453,6 @@ function resolveRimCollision(ballPos, vel, hoop) {
 
     const vHoriz = new THREE.Vector3(vel.x, 0, vel.z);
     const vn = normal.dot(vHoriz);
-
     if (vn < 0) {
       const vt = vHoriz.clone().sub(normal.clone().multiplyScalar(vn));
       const vHorizNew = vt.clone().add(normal.multiplyScalar(-vn * RIM_RESTITUTION));
@@ -515,7 +479,9 @@ function finalizeShotAsMiss() {
     const aimPct = computeAimPct(state.currentShot.minDistToCenter);
     state.currentShot.aimPct = aimPct;
     updateLastAimUI(aimPct);
-    showMsg(`MISSED SHOT (aim ${aimPct}%)`);
+    showMsg(`MISSED SHOT (aim ${aimPct}%)`, 1500, "#ff4d4d");
+    flashScorePanel("red");
+    rimFlash(state.currentShot.hoop, 0xff0000);
     updateStatsUI();
   }
 }
@@ -526,20 +492,19 @@ function finalizeShotAsMake() {
     const aimPct = computeAimPct(state.currentShot.minDistToCenter);
     state.currentShot.aimPct = aimPct;
     updateLastAimUI(aimPct);
-    showMsg(`SHOT MADE! +2 (aim ${aimPct}%)`);
+    showMsg(`SHOT MADE! +2 (aim ${aimPct}%)`, 1500, "#00ff88");
+    flashScorePanel("green");
+    rimFlash(state.currentShot.hoop, 0x00ff00);
     updateStatsUI();
   }
 }
 
-// STRICT: must be going DOWN, cross rim plane from above to below, and be inside the rim circle
+// STRICT: must be going DOWN, cross rim plane top->bottom, center inside ring (with margin)
 function checkScoreStrict(prevPos, currPos, vel, hoop) {
   if (!state.currentShot || state.currentShot.made) return;
-
-  // Must be going DOWN
-  if (vel.y >= 0) return;
+  if (vel.y >= 0) return; // must be downward
 
   const rimPos = hoop.rimWorldPos;
-
   const wasAbove = prevPos.y > RIM_HEIGHT;
   const nowBelow = currPos.y <= RIM_HEIGHT;
   if (!wasAbove || !nowBelow) return;
@@ -560,11 +525,9 @@ function checkScoreStrict(prevPos, currPos, vel, hoop) {
 function applyBallRotation(dt) {
   const speed = state.vel.length();
   if (speed < 1e-4) return;
-
   const v = state.vel.clone();
   const axis = new THREE.Vector3(-v.z, 0, v.x);
   if (axis.lengthSq() < 1e-6) return;
-
   axis.normalize();
   const angularSpeed = speed / BALL_RADIUS;
   state.ball.rotateOnAxis(axis, angularSpeed * dt);
@@ -572,7 +535,6 @@ function applyBallRotation(dt) {
 
 /* -------------------- 18) Game Loop -------------------- */
 function update(dt) {
-  // power
   if (!state.inAir) {
     if (keys["KeyW"]) {
       state.power = clamp(state.power + 0.75 * dt, POWER_MIN, POWER_MAX);
@@ -584,7 +546,6 @@ function update(dt) {
     }
   }
 
-  // movement
   if (!state.inAir) {
     let dx = 0, dz = 0;
     if (keys["ArrowLeft"]) dx -= 1;
@@ -609,28 +570,21 @@ function update(dt) {
 
   const prevPos = state.prevPos.clone();
 
-  // physics
   if (state.inAir) {
     state.vel.y += GRAVITY * dt;
     state.vel.multiplyScalar(AIR_FRICTION);
     state.ball.position.addScaledVector(state.vel, dt);
 
-    // track aim%
+    // Aim% tracking
     if (state.currentShot && state.currentShot.hoop) {
       const rimPos = state.currentShot.hoop.rimWorldPos;
-      const d = Math.hypot(
-        state.ball.position.x - rimPos.x,
-        state.ball.position.z - rimPos.z
-      );
-      if (d < state.currentShot.minDistToCenter) {
-        state.currentShot.minDistToCenter = d;
-      }
+      const d = Math.hypot(state.ball.position.x - rimPos.x, state.ball.position.z - rimPos.z);
+      if (d < state.currentShot.minDistToCenter) state.currentShot.minDistToCenter = d;
     }
 
     // collisions
     resolveRimCollision(state.ball.position, state.vel, state.hoops.left);
     resolveRimCollision(state.ball.position, state.vel, state.hoops.right);
-
     resolveSphereAABBCollision(state.ball.position, BALL_RADIUS, state.hoops.left.backboardBox, state.vel, BACKBOARD_BOUNCE);
     resolveSphereAABBCollision(state.ball.position, BALL_RADIUS, state.hoops.right.backboardBox, state.vel, BACKBOARD_BOUNCE);
 
@@ -641,7 +595,6 @@ function update(dt) {
       if (Math.abs(state.vel.y) < 0.6 && state.vel.length() < 0.6) {
         state.vel.set(0, 0, 0);
         state.inAir = false;
-
         if (state.currentShot && !state.currentShot.made && !state.currentShot.finished) {
           finalizeShotAsMiss();
         }
@@ -652,25 +605,21 @@ function update(dt) {
       }
     }
 
-    // STRICT scoring check on both hoops
+    // strict scoring check
     checkScoreStrict(prevPos, state.ball.position, state.vel, state.hoops.left);
     checkScoreStrict(prevPos, state.ball.position, state.vel, state.hoops.right);
   }
 
-  // rotation
   applyBallRotation(dt);
 
-  // store prev
   state.prevPos.copy(state.ball.position);
 }
 
 function animate() {
   requestAnimationFrame(animate);
   const dt = clock.getDelta();
-
   if (orbitEnabled) controls.update();
   update(dt);
-
   renderer.render(scene, camera);
 }
 animate();
