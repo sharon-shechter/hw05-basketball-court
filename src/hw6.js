@@ -1,7 +1,8 @@
-// hw6.js – HW06 start: Phases 1–3 (movement, power, basic shoot+gravity)
-// After you verify this runs, we'll add: rim collisions, rotation, scoring, UI polish.
+// HW06 – Full version (Phases 1–7) + Aim% + STRICT scoring
+// index.html must have an import map that maps "three" & "three/addons/...".
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
 /* -------------------- 1) Scene / Camera / Renderer -------------------- */
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x000000);
@@ -44,15 +45,21 @@ const FT_RADIUS = 1.8;
 
 // Physics & control
 const BALL_RADIUS = 0.375;
-const GRAVITY = -9.8;        // m/s^2 (we can scale later if needed)
-const RESTITUTION = 0.6;     // energy kept after bounce
-const FLOOR_Y = 0;           // floor top is y=0 in our setup
-const MOVE_SPEED = 6;        // m/s when dragging with arrows (while ball is on ground)
+const GRAVITY = -9.8;
+const RESTITUTION = 0.45;
+const BACKBOARD_BOUNCE = 0.30;
+const AIR_FRICTION = 0.995;
+const FLOOR_Y = 0;
+const MOVE_SPEED = 6;
 const POWER_MIN = 0.05;
 const POWER_MAX = 1.0;
 const DEFAULT_POWER = 0.5;
-const H_POWER = 12;          // horizontal speed scale
-const V_POWER = 9;           // vertical speed scale
+const H_POWER = 12;
+const V_POWER = 9;
+
+// Rim collision tweak
+const RIM_BALL_BUFFER = 0.06;
+const RIM_RESTITUTION = 0.10;
 
 /* -------------------- 4) Helpers -------------------- */
 function createLine(points, color = 0xffffff, lineWidth = 2) {
@@ -60,15 +67,8 @@ function createLine(points, color = 0xffffff, lineWidth = 2) {
   const material = new THREE.LineBasicMaterial({ color, linewidth: lineWidth });
   return new THREE.Line(geometry, material);
 }
-
-function generateArcPoints(radius, angleStart, angleEnd, segments = 64) {
-  const pts = [];
-  for (let i = 0; i <= segments; i++) {
-    const t = i / segments;
-    const angle = angleStart + t * (angleEnd - angleStart);
-    pts.push(new THREE.Vector3(Math.cos(angle) * radius, 0.01, Math.sin(angle) * radius));
-  }
-  return pts;
+function clamp(val, min, max) {
+  return Math.max(min, Math.min(max, val));
 }
 
 /* -------------------- 5) Court -------------------- */
@@ -76,7 +76,7 @@ function createFloor() {
   const geometry = new THREE.BoxGeometry(COURT_LENGTH, COURT_HEIGHT, COURT_WIDTH);
   const material = new THREE.MeshPhongMaterial({ color: 0xc68642, shininess: 40 });
   const floor = new THREE.Mesh(geometry, material);
-  floor.position.y = -COURT_HEIGHT / 2; // put floor top at y = 0
+  floor.position.y = -COURT_HEIGHT / 2;
   floor.receiveShadow = true;
   scene.add(floor);
 }
@@ -106,7 +106,6 @@ function addCourtMarkings() {
     return buildLine(pts);
   };
 
-  // Three-point arcs
   markings.add(
     buildArc(-COURT_LENGTH / 2 + RIM_TO_BASELINE, THREE_POINT_RADIUS, -Math.PI / 2, Math.PI / 2)
   );
@@ -114,7 +113,6 @@ function addCourtMarkings() {
     buildArc(COURT_LENGTH / 2 - RIM_TO_BASELINE, THREE_POINT_RADIUS, Math.PI / 2, 3 * Math.PI / 2)
   );
 
-  // Center line & circle
   markings.add(
     buildLine([
       new THREE.Vector3(0, 0.01, COURT_WIDTH / 2),
@@ -128,28 +126,19 @@ function addCourtMarkings() {
 
 /* -------------------- 6) Hoops -------------------- */
 function addBackboardSquare(boardMesh, color = 0xff0000) {
-  const w = 0.59;
-  const h = 0.45;
-  const topOffset = 0.15;
-
-  const halfW = w / 2;
-  const halfH = h / 2;
-
+  const w = 0.59, h = 0.45, topOffset = 0.15;
+  const halfW = w / 2, halfH = h / 2;
   const pts = [
     new THREE.Vector3(-halfW, halfH, BACKBOARD_THICKNESS / 2 + 0.001),
     new THREE.Vector3(halfW, halfH, BACKBOARD_THICKNESS / 2 + 0.001),
     new THREE.Vector3(halfW, -halfH, BACKBOARD_THICKNESS / 2 + 0.001),
     new THREE.Vector3(-halfW, -halfH, BACKBOARD_THICKNESS / 2 + 0.001),
   ];
-
-  // Shift rectangle down
   pts.forEach((p) => (p.y -= BACKBOARD_HEIGHT / 2 - topOffset - halfH));
-
   const square = new THREE.LineLoop(
     new THREE.BufferGeometry().setFromPoints(pts),
     new THREE.LineBasicMaterial({ color, linewidth: 2 })
   );
-
   boardMesh.add(square);
 }
 
@@ -162,7 +151,6 @@ function createHoop(isLeftSide) {
   const groupX = baselineX - BOARD_FRONT_LOCAL_Z * (isLeftSide ? 1 : -1);
   hoopGroup.position.set(groupX, 0, 0);
 
-  // backboard
   const backboard = new THREE.Mesh(
     new THREE.BoxGeometry(BACKBOARD_WIDTH, BACKBOARD_HEIGHT, BACKBOARD_THICKNESS),
     new THREE.MeshPhongMaterial({ color: 0xffffff, transparent: true, opacity: 0.4 })
@@ -171,7 +159,6 @@ function createHoop(isLeftSide) {
   hoopGroup.add(backboard);
   addBackboardSquare(backboard);
 
-  // rim
   const rim = new THREE.Mesh(
     new THREE.TorusGeometry(RIM_RADIUS, 0.03, 12, 24),
     new THREE.MeshPhongMaterial({ color: 0xff5900 })
@@ -180,10 +167,8 @@ function createHoop(isLeftSide) {
   rim.position.set(0, RIM_HEIGHT, 0);
   hoopGroup.add(rim);
 
-  // net (simple straight lines)
   const netGroup = new THREE.Group();
-  const netSegments = 12,
-    netHeight = 0.45;
+  const netSegments = 12, netHeight = 0.45;
   for (let i = 0; i < netSegments; i++) {
     const a = (i / netSegments) * Math.PI * 2;
     const p1 = new THREE.Vector3(Math.cos(a) * RIM_RADIUS * 0.95, RIM_HEIGHT - 0.02, Math.sin(a) * RIM_RADIUS * 0.95);
@@ -192,7 +177,6 @@ function createHoop(isLeftSide) {
   }
   hoopGroup.add(netGroup);
 
-  // support pole
   const poleMat = new THREE.MeshPhongMaterial({ color: 0x999999 });
   const pole = new THREE.Mesh(
     new THREE.CylinderGeometry(0.1, 0.1, RIM_HEIGHT + BACKBOARD_HEIGHT, 16),
@@ -201,7 +185,6 @@ function createHoop(isLeftSide) {
   pole.position.set(0, (RIM_HEIGHT + BACKBOARD_HEIGHT) / 2 - 0.15, -1.25);
   hoopGroup.add(pole);
 
-  // support arm
   const armLen = 1.25 - 0.3;
   const arm = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.12, armLen), poleMat);
   arm.position.set(0, RIM_HEIGHT, -(0.3 + armLen / 2));
@@ -209,11 +192,12 @@ function createHoop(isLeftSide) {
 
   scene.add(hoopGroup);
 
-  // return the world-space rim position approximation we will use for now
   const rimWorldPos = new THREE.Vector3();
   rim.getWorldPosition(rimWorldPos);
 
-  return { hoopGroup, rim, rimWorldPos };
+  const backboardBox = new THREE.Box3().setFromObject(backboard);
+
+  return { hoopGroup, rim, rimWorldPos, backboard, backboardBox };
 }
 
 /* -------------------- 7) Basketball -------------------- */
@@ -223,9 +207,6 @@ function createBasketball() {
   ball.position.set(0, BALL_RADIUS + COURT_HEIGHT / 2, 0);
   ball.castShadow = true;
   scene.add(ball);
-
-  // (Keeping seams simple for now – not required for HW06)
-
   return ball;
 }
 
@@ -236,7 +217,9 @@ function setupUI() {
   scoreDiv.innerHTML = `
     <div><b>Score</b>: <span id="scoreValue">0</span></div>
     <div>Attempts: <span id="attemptsValue">0</span></div>
+    <div>Makes: <span id="makesValue">0</span></div>
     <div>Accuracy: <span id="accuracyValue">0%</span></div>
+    <div>Last Aim: <span id="lastAimValue">-</span></div>
   `;
   document.body.appendChild(scoreDiv);
 
@@ -284,9 +267,11 @@ function setupUI() {
     }
     #powerBar {
       height: 100%; width: 50%; background: #27ae60;
+      transition: width 0.05s linear;
     }
     #msg {
       top: 20px; right: 20px; font-weight: bold;
+      text-shadow: 0 0 6px #000;
     }
   `;
   document.head.appendChild(style);
@@ -312,6 +297,8 @@ const state = {
     left: null,
     right: null,
   },
+  currentShot: null,
+  prevPos: new THREE.Vector3(),
 };
 
 /* -------------------- 10) Init -------------------- */
@@ -324,6 +311,7 @@ function initScene() {
 
   state.ball = createBasketball();
   setupUI();
+  updateStatsUI();
 }
 initScene();
 
@@ -360,11 +348,7 @@ window.addEventListener("keyup", (e) => {
 });
 
 /* -------------------- 13) Core mechanics -------------------- */
-function clamp(val, min, max) {
-  return Math.max(min, Math.min(max, val));
-}
-
-function nearestHoopPos() {
+function nearestHoop() {
   const leftPos = state.hoops.left.rimWorldPos;
   const rightPos = state.hoops.right.rimWorldPos;
   const b = state.ball.position;
@@ -372,27 +356,34 @@ function nearestHoopPos() {
   const leftDistSq = leftPos.distanceToSquared(b);
   const rightDistSq = rightPos.distanceToSquared(b);
 
-  return leftDistSq < rightDistSq ? leftPos : rightPos;
+  return leftDistSq < rightDistSq ? state.hoops.left : state.hoops.right;
 }
 
 function shoot() {
   state.stats.attempts++;
   updateStatsUI();
 
-  const target = nearestHoopPos();
+  const targetHoop = nearestHoop();
+  const target = targetHoop.rimWorldPos.clone();
 
-  // horizontal direction
   const dir = new THREE.Vector3().subVectors(target, state.ball.position);
-  // we’ll manually set y velocity, so zero out y in dir for horizontal direction
   dir.y = 0;
   dir.normalize();
 
-  // scale velocity by power
   const hp = state.power * H_POWER;
   const vp = state.power * V_POWER;
 
   state.vel.set(dir.x * hp, vp, dir.z * hp);
   state.inAir = true;
+
+  state.currentShot = {
+    made: false,
+    scored: false,
+    finished: false,
+    hoop: targetHoop,
+    minDistToCenter: Infinity,
+    aimPct: 0
+  };
 
   showMsg("SHOOT!");
 }
@@ -403,6 +394,7 @@ function resetBall() {
   state.inAir = false;
   state.power = DEFAULT_POWER;
   updatePowerUI();
+  updateStatsUI();
   showMsg("Reset");
 }
 
@@ -417,18 +409,25 @@ function updateStatsUI() {
   const s = state.stats;
   const scoreElem = document.getElementById("scoreValue");
   const attemptsElem = document.getElementById("attemptsValue");
+  const makesElem = document.getElementById("makesValue");
   const accElem = document.getElementById("accuracyValue");
 
   if (scoreElem) scoreElem.textContent = s.score;
   if (attemptsElem) attemptsElem.textContent = s.attempts;
+  if (makesElem) makesElem.textContent = s.made;
   if (accElem) {
     const pct = s.attempts > 0 ? ((s.made / s.attempts) * 100).toFixed(1) : "0.0";
     accElem.textContent = pct + "%";
   }
 }
 
+function updateLastAimUI(pct) {
+  const el = document.getElementById("lastAimValue");
+  if (el) el.textContent = pct + "%";
+}
+
 let msgTimeout = null;
-function showMsg(text, ms = 1000) {
+function showMsg(text, ms = 1200) {
   const div = document.getElementById("msg");
   if (!div) return;
   div.textContent = text;
@@ -436,9 +435,144 @@ function showMsg(text, ms = 1000) {
   msgTimeout = setTimeout(() => (div.textContent = ""), ms);
 }
 
-/* -------------------- 15) Game Loop -------------------- */
+/* -------------------- 15) Collision helpers -------------------- */
+function resolveSphereAABBCollision(center, radius, box, vel, restitution) {
+  const closest = new THREE.Vector3(
+    clamp(center.x, box.min.x, box.max.x),
+    clamp(center.y, box.min.y, box.max.y),
+    clamp(center.z, box.min.z, box.max.z)
+  );
+  const diff = new THREE.Vector3().subVectors(center, closest);
+  const distSq = diff.lengthSq();
+
+  if (distSq < radius * radius) {
+    const dist = Math.sqrt(distSq);
+    let normal;
+    if (dist === 0) {
+      normal = vel.lengthSq() > 0 ? vel.clone().normalize().negate() : new THREE.Vector3(1, 0, 0);
+    } else {
+      normal = diff.multiplyScalar(1 / dist);
+    }
+
+    const penetration = radius - dist;
+    center.addScaledVector(normal, penetration + 1e-4);
+
+    const vn = normal.dot(vel);
+    const vt = vel.clone().sub(normal.clone().multiplyScalar(vn));
+    const vNew = vt.clone().add(normal.multiplyScalar(-vn * restitution));
+    vel.copy(vNew);
+    return true;
+  }
+  return false;
+}
+
+// Rim collision – don't bounce if the ball is falling (to allow it to pass through)
+function resolveRimCollision(ballPos, vel, hoop) {
+  const rimPos = hoop.rimWorldPos;
+  const horizontalDist = Math.hypot(ballPos.x - rimPos.x, ballPos.z - rimPos.z);
+
+  const nearVert = Math.abs(ballPos.y - RIM_HEIGHT) < BALL_RADIUS * 2.0;
+  const minDist = RIM_RADIUS + BALL_RADIUS - RIM_BALL_BUFFER;
+
+  if (nearVert && horizontalDist < minDist) {
+    if (vel.y <= 0) return false; // falling: let it pass
+
+    const normal = new THREE.Vector3(
+      (ballPos.x - rimPos.x) / (horizontalDist || 1),
+      0,
+      (ballPos.z - rimPos.z) / (horizontalDist || 1)
+    );
+
+    const penetration = minDist - horizontalDist;
+    ballPos.addScaledVector(normal, penetration + 1e-4);
+
+    const vHoriz = new THREE.Vector3(vel.x, 0, vel.z);
+    const vn = normal.dot(vHoriz);
+
+    if (vn < 0) {
+      const vt = vHoriz.clone().sub(normal.clone().multiplyScalar(vn));
+      const vHorizNew = vt.clone().add(normal.multiplyScalar(-vn * RIM_RESTITUTION));
+      vel.x = vHorizNew.x;
+      vel.z = vHorizNew.z;
+    }
+
+    vel.y *= 0.9;
+    return true;
+  }
+  return false;
+}
+
+/* -------------------- 16) Scoring (STRICT) + Aim% -------------------- */
+function computeAimPct(minDist) {
+  const maxBad = RIM_RADIUS + BALL_RADIUS;
+  const norm = 1 - clamp(minDist / maxBad, 0, 1);
+  return Math.round(norm * 100);
+}
+
+function finalizeShotAsMiss() {
+  if (state.currentShot && !state.currentShot.finished) {
+    state.currentShot.finished = true;
+    const aimPct = computeAimPct(state.currentShot.minDistToCenter);
+    state.currentShot.aimPct = aimPct;
+    updateLastAimUI(aimPct);
+    showMsg(`MISSED SHOT (aim ${aimPct}%)`);
+    updateStatsUI();
+  }
+}
+
+function finalizeShotAsMake() {
+  if (state.currentShot && !state.currentShot.finished) {
+    state.currentShot.finished = true;
+    const aimPct = computeAimPct(state.currentShot.minDistToCenter);
+    state.currentShot.aimPct = aimPct;
+    updateLastAimUI(aimPct);
+    showMsg(`SHOT MADE! +2 (aim ${aimPct}%)`);
+    updateStatsUI();
+  }
+}
+
+// STRICT: must be going DOWN, cross rim plane from above to below, and be inside the rim circle
+function checkScoreStrict(prevPos, currPos, vel, hoop) {
+  if (!state.currentShot || state.currentShot.made) return;
+
+  // Must be going DOWN
+  if (vel.y >= 0) return;
+
+  const rimPos = hoop.rimWorldPos;
+
+  const wasAbove = prevPos.y > RIM_HEIGHT;
+  const nowBelow = currPos.y <= RIM_HEIGHT;
+  if (!wasAbove || !nowBelow) return;
+
+  const horizDist = Math.hypot(currPos.x - rimPos.x, currPos.z - rimPos.z);
+  const inside = horizDist <= (RIM_RADIUS - BALL_RADIUS * 0.10);
+
+  if (inside) {
+    state.stats.score += 2;
+    state.stats.made += 1;
+    state.currentShot.made = true;
+    state.currentShot.scored = true;
+    finalizeShotAsMake();
+  }
+}
+
+/* -------------------- 17) Rotation animation -------------------- */
+function applyBallRotation(dt) {
+  const speed = state.vel.length();
+  if (speed < 1e-4) return;
+
+  const v = state.vel.clone();
+  const axis = new THREE.Vector3(-v.z, 0, v.x);
+  if (axis.lengthSq() < 1e-6) return;
+
+  axis.normalize();
+  const angularSpeed = speed / BALL_RADIUS;
+  state.ball.rotateOnAxis(axis, angularSpeed * dt);
+}
+
+/* -------------------- 18) Game Loop -------------------- */
 function update(dt) {
-  // 1) Adjust shot power (Phase 2)
+  // power
   if (!state.inAir) {
     if (keys["KeyW"]) {
       state.power = clamp(state.power + 0.75 * dt, POWER_MIN, POWER_MAX);
@@ -450,21 +584,19 @@ function update(dt) {
     }
   }
 
-  // 2) Move ball with arrows while it's not in the air (Phase 1)
+  // movement
   if (!state.inAir) {
-    let dx = 0,
-      dz = 0;
+    let dx = 0, dz = 0;
     if (keys["ArrowLeft"]) dx -= 1;
     if (keys["ArrowRight"]) dx += 1;
-    if (keys["ArrowUp"]) dz -= 1; // forward
-    if (keys["ArrowDown"]) dz += 1; // backward
+    if (keys["ArrowUp"]) dz -= 1;
+    if (keys["ArrowDown"]) dz += 1;
 
     if (dx !== 0 || dz !== 0) {
       const dir = new THREE.Vector3(dx, 0, dz).normalize();
       const step = MOVE_SPEED * dt;
       state.ball.position.addScaledVector(dir, step);
 
-      // clamp to court
       const minX = -COURT_LENGTH / 2 + BALL_RADIUS;
       const maxX = COURT_LENGTH / 2 - BALL_RADIUS;
       const minZ = -COURT_WIDTH / 2 + BALL_RADIUS;
@@ -475,20 +607,44 @@ function update(dt) {
     }
   }
 
-  // 3) Physics for flight + ground bounce (Phase 3)
+  const prevPos = state.prevPos.clone();
+
+  // physics
   if (state.inAir) {
-    // integrate velocity
     state.vel.y += GRAVITY * dt;
+    state.vel.multiplyScalar(AIR_FRICTION);
     state.ball.position.addScaledVector(state.vel, dt);
 
-    // ground collision
+    // track aim%
+    if (state.currentShot && state.currentShot.hoop) {
+      const rimPos = state.currentShot.hoop.rimWorldPos;
+      const d = Math.hypot(
+        state.ball.position.x - rimPos.x,
+        state.ball.position.z - rimPos.z
+      );
+      if (d < state.currentShot.minDistToCenter) {
+        state.currentShot.minDistToCenter = d;
+      }
+    }
+
+    // collisions
+    resolveRimCollision(state.ball.position, state.vel, state.hoops.left);
+    resolveRimCollision(state.ball.position, state.vel, state.hoops.right);
+
+    resolveSphereAABBCollision(state.ball.position, BALL_RADIUS, state.hoops.left.backboardBox, state.vel, BACKBOARD_BOUNCE);
+    resolveSphereAABBCollision(state.ball.position, BALL_RADIUS, state.hoops.right.backboardBox, state.vel, BACKBOARD_BOUNCE);
+
+    // ground
     const bottomY = state.ball.position.y - BALL_RADIUS;
     if (bottomY <= FLOOR_Y) {
       state.ball.position.y = FLOOR_Y + BALL_RADIUS;
-      if (Math.abs(state.vel.y) < 0.5) {
-        // stop after small bounces
+      if (Math.abs(state.vel.y) < 0.6 && state.vel.length() < 0.6) {
         state.vel.set(0, 0, 0);
         state.inAir = false;
+
+        if (state.currentShot && !state.currentShot.made && !state.currentShot.finished) {
+          finalizeShotAsMiss();
+        }
       } else {
         state.vel.y = -state.vel.y * RESTITUTION;
         state.vel.x *= 0.8;
@@ -496,8 +652,16 @@ function update(dt) {
       }
     }
 
-    // (Phase 4+6 later: rim collisions, scoring detection, etc.)
+    // STRICT scoring check on both hoops
+    checkScoreStrict(prevPos, state.ball.position, state.vel, state.hoops.left);
+    checkScoreStrict(prevPos, state.ball.position, state.vel, state.hoops.right);
   }
+
+  // rotation
+  applyBallRotation(dt);
+
+  // store prev
+  state.prevPos.copy(state.ball.position);
 }
 
 function animate() {
@@ -510,3 +674,10 @@ function animate() {
   renderer.render(scene, camera);
 }
 animate();
+
+/* -------------------- 19) Resize -------------------- */
+window.addEventListener("resize", () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
