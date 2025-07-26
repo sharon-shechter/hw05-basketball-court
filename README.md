@@ -21,6 +21,7 @@ Turns the HW 05 basketball court into a **playable 3‑D shooting game**:
 * Rotation animation on the ball  
 * Live UI: score, attempts, makes, accuracy, power bar  
 * Instant feedback — “**SHOT MADE!**” / “**MISSED SHOT**”, rim & scoreboard flash
+* 
 **Bonus:**  
   - Multiple hoops logic  
   - Aim% display (how close the shot was to the hoop center)
