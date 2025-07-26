@@ -1,44 +1,38 @@
-# HW05 – 3D Basketball Court
-
-**Full Name:** Sharon Shechter  
-**Student ID:** 207812116
-
-**Partner**
-**Full Name:** Itai Kurzweil
-**Student ID:** 209025568
+# Computer Graphics – HW 06  
+### Interactive Basketball Shooting Game (Three.js)
 
 ---
 
-## How to Run
+## 📝 Submitters  
+| Name | Student ID |
+|------|------------|
+|Sharon Shechter | 207812116 |
+|Shahar kronenfeld  | 208462424 |
 
+
+---
+
+## 📖 What this project does  
+Turns the HW 05 basketball court into a **playable 3‑D shooting game**:
+
+* Physics‑based ball (gravity, bounces, rim & backboard hits)  
+* Keyboard controls (move, set power, shoot, reset, orbit camera)  
+* Strict scoring – only counts when the ball **falls through** the hoop  
+* Rotation animation on the ball  
+* Live UI: score, attempts, makes, accuracy, power bar  
+* Instant feedback — “**SHOT MADE!**” / “**MISSED SHOT**”, rim & scoreboard flash
+**Bonus:**  
+  - Multiple hoops logic  
+  - Aim% display (how close the shot was to the hoop center)
+
+---
+
+## ▶️ How to run  
 1. Make sure you have **Node.js** installed.
 2. From the project root, start a local server using:
    node index.js
 3. Open your browser and navigate to:
    http://localhost:8000
 
----
-
-## Features Implemented
-
-- Fully modeled basketball court with:
-  - Centre line & centre circle
-  - Accurate three-point arcs on both sides
-- Two hoops:
-  - Transparent backboards with correct dimensions
-  - Orange rims, line-based nets, and support structure (pole + arm)
-  - Red square box overlay on each backboard (shooting target)
-- Basketball:
-  - Orange color with four realistic black seams (classic pattern)
-- Camera and lighting:
-  - Directional + ambient lighting with shadows
-  - OrbitControls toggle via **O** key
-- UI:
-  - Score and controls display with styled HTML/CSS
-
----
-
-## Additional Features Implemented
-
-- **Free-throw semicircles** accurately placed on both sides of the court
-- **Red square guide box** drawn on each backboard
+## Video link : 
+https://youtu.be/KARi6nDuuZ0
